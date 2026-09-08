@@ -20,6 +20,22 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
 unsigned int createShaderProgram();
 string read(const char* filePath);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+// global variables
+vec3 cameraPos   = vec3(0.0f, 0.0f,  3.0f);
+vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
+vec3 cameraUp    = vec3(0.0f, 1.0f,  0.0f);
+vec3 direction;
+float camPitch = 0.0f;
+float camYaw = -90.0f;
+float lastX = 400, lastY = 300;
+float fov = 45.0f;
+bool firstMouse = true;
+mat4 view;
+float deltaTime = 0.0f;	// Time between current frame and last frame
+float lastFrame = 0.0f; // Time of last frame
 
 int main()
 {
@@ -49,7 +65,13 @@ int main()
     }
 
     // Define Viewport
-    glViewport(0, 0, 800, 600);
+    bool retina_screen = false;
+    // Check if the os is macos
+    #ifdef __APPLE__
+        retina_screen = true;
+    #endif
+    if (retina_screen) glViewport(0, 0, 1600, 1200);
+    else glViewport(0, 0, 800, 600);
 
     // Resize callback
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -164,11 +186,24 @@ int main()
 
     // transformations
     mat4 model = mat4(1.0f);
-    model = rotate(model, radians(-55.0f), vec3(1.0f, 0.0f, 0.0f));
-    mat4 view = mat4(1.0f);
-    view = translate(view, vec3(0.0f, 0.0f, -3.0f));
+    // model = rotate(model, radians(-55.0f), vec3(1.0f, 0.0f, 0.0f));
+    // mat4 view = mat4(1.0f);
+    // view = translate(view, vec3(0.0f, 0.0f, -3.0f));
     mat4 projection;
     projection = perspective(radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
+    // vec3 cameraPos = vec3(0.0f, 0.0f, 3.0f);
+    // vec3 cameraTarget = vec3(0.0f, 0.0f, 0.0f);
+    // vec3 cameraDirection = normalize(cameraPos - cameraTarget);
+    // vec3 up = vec3(0.0f, 1.0f, 0.0f); 
+    // vec3 cameraRight = normalize(cross(up, cameraDirection));
+    // vec3 cameraUp = cross(cameraDirection, cameraRight);
+    // view = lookAt(vec3(0.0f, 0.0f, 3.0f), 
+  	// 	   vec3(0.0f, 0.0f, 0.0f), 
+  	// 	   vec3(0.0f, 1.0f, 0.0f));
+    view = lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+    direction.x = cos(radians(camYaw)) * cos(radians(camPitch));
+    direction.y = sin(radians(camPitch));
+    direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
 
 
     // Create Buffers
@@ -200,18 +235,27 @@ int main()
 
     glEnable(GL_DEPTH_TEST);  
 
+    // register mouse callback fct
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // disable mouse cursor
+    glfwSetCursorPosCallback(window, mouse_callback);  
+    glfwSetScrollCallback(window, scroll_callback); 
+
     // Render loop
     while(!glfwWindowShouldClose(window))
     {
         // inputs
         processInput(window);
 
+        // delta time
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;  
+
         // rendering commands
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        model = rotate(model, (float)glfwGetTime() * radians(0.5f), vec3(0.5f, 1.0f, 0.0f));
         unsigned int modelLoc = glGetUniformLocation(ourShader.ID, "model");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
         unsigned int viewLoc = glGetUniformLocation(ourShader.ID, "view");
@@ -222,15 +266,24 @@ int main()
         glBindVertexArray(VAO);
         for(unsigned int i = 0; i < 10; i++)
         {
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, cubePositions[i]);
+            mat4 model = mat4(1.0f);
+            model = translate(model, cubePositions[i]);
             float angle = 20.0f * i; 
-            model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            model = rotate(model, radians(angle), vec3(1.0f, 0.3f, 0.5f));
             unsigned int modelLoc = glGetUniformLocation(ourShader.ID, "model");
             glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
 
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
+
+        // const float radius = 10.0f;
+        // float camX = sin(glfwGetTime()) * radius;
+        // float camZ = cos(glfwGetTime()) * radius;
+        // // mat4 view;
+        // view = lookAt(vec3(camX, 0.0, camZ), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+        view = lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+        projection = perspective(radians(fov), 800.0f / 600.0f, 0.1f, 100.0f); 
+
 
         // // 4. draw the object
         ourShader.use();
@@ -265,4 +318,51 @@ void processInput(GLFWwindow *window)
 {
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    float cameraSpeed = 2.5f * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        cameraPos += cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        cameraPos -= cameraSpeed * cameraFront;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        cameraPos -= normalize(cross(cameraFront, cameraUp)) * cameraSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        cameraPos += normalize(cross(cameraFront, cameraUp)) * cameraSpeed;
+
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (firstMouse) // initially set to true
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates range from bottom to top
+    lastX = xpos;
+    lastY = ypos;
+
+    const float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+    camYaw   += xoffset;
+    camPitch += yoffset; 
+    if(camPitch > 89.0f)
+        camPitch =  89.0f;
+    if(camPitch < -89.0f)
+        camPitch = -89.0f;
+    direction.x = cos(radians(camYaw)) * cos(radians(camPitch));
+    direction.y = sin(radians(camPitch));
+    direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
+    cameraFront = normalize(direction);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    fov -= (float)yoffset;
+    if (fov < 1.0f)
+        fov = 1.0f;
+    if (fov > 45.0f)
+        fov = 45.0f; 
 }
