@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "shader.h"
+#include "camera.h"
 
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -25,11 +26,11 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 // global variables
 vec3 cameraPos   = vec3(0.0f, 0.0f,  3.0f);
-vec3 cameraFront = vec3(0.0f, 0.0f, -1.0f);
 vec3 cameraUp    = vec3(0.0f, 1.0f,  0.0f);
 vec3 direction;
 float camPitch = 0.0f;
 float camYaw = -90.0f;
+Camera camera(cameraPos, cameraUp, camYaw, camPitch);
 float lastX = 400, lastY = 300;
 float fov = 45.0f;
 bool firstMouse = true;
@@ -185,25 +186,8 @@ int main()
     ourShader.setInt("texture2", 1); // or with shader class
 
     // transformations
-    mat4 model = mat4(1.0f);
-    // model = rotate(model, radians(-55.0f), vec3(1.0f, 0.0f, 0.0f));
-    // mat4 view = mat4(1.0f);
-    // view = translate(view, vec3(0.0f, 0.0f, -3.0f));
+    mat4 model;
     mat4 projection;
-    projection = perspective(radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
-    // vec3 cameraPos = vec3(0.0f, 0.0f, 3.0f);
-    // vec3 cameraTarget = vec3(0.0f, 0.0f, 0.0f);
-    // vec3 cameraDirection = normalize(cameraPos - cameraTarget);
-    // vec3 up = vec3(0.0f, 1.0f, 0.0f); 
-    // vec3 cameraRight = normalize(cross(up, cameraDirection));
-    // vec3 cameraUp = cross(cameraDirection, cameraRight);
-    // view = lookAt(vec3(0.0f, 0.0f, 3.0f), 
-  	// 	   vec3(0.0f, 0.0f, 0.0f), 
-  	// 	   vec3(0.0f, 1.0f, 0.0f));
-    view = lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-    direction.x = cos(radians(camYaw)) * cos(radians(camPitch));
-    direction.y = sin(radians(camPitch));
-    direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
 
 
     // Create Buffers
@@ -211,8 +195,6 @@ int main()
     glGenBuffers(1, &VBO);
     unsigned int VAO;
     glGenVertexArrays(1, &VAO);
-    // unsigned int EBO;
-    // glGenBuffers(1, &EBO);
 
     // ..:: Initialization code (done once (unless your object frequently changes)) :: ..
     // 1. bind Vertex Array Object
@@ -220,16 +202,10 @@ int main()
     // 2. copy our vertices array in a buffer for OpenGL to use
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    // glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 
     // 3. then set our vertex attributes pointers
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // color attribute
-    // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3* sizeof(float)));
-    // glEnableVertexAttribArray(1);  
-    // texture attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1); 
 
@@ -256,6 +232,7 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // update the uniform transformations
         unsigned int modelLoc = glGetUniformLocation(ourShader.ID, "model");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
         unsigned int viewLoc = glGetUniformLocation(ourShader.ID, "view");
@@ -263,6 +240,7 @@ int main()
         unsigned int projectionLoc = glGetUniformLocation(ourShader.ID, "projection");
         glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
         
+        // Place objects in the scene
         glBindVertexArray(VAO);
         for(unsigned int i = 0; i < 10; i++)
         {
@@ -276,13 +254,9 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // const float radius = 10.0f;
-        // float camX = sin(glfwGetTime()) * radius;
-        // float camZ = cos(glfwGetTime()) * radius;
-        // // mat4 view;
-        // view = lookAt(vec3(camX, 0.0, camZ), vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
-        view = lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-        projection = perspective(radians(fov), 800.0f / 600.0f, 0.1f, 100.0f); 
+        // camera/view transformation
+        view = lookAt(camera.Position, camera.Position + camera.Front, camera.Up);
+        projection = perspective(radians(camera.Zoom), 800.0f / 600.0f, 0.1f, 100.0f); 
 
 
         // // 4. draw the object
@@ -292,11 +266,7 @@ int main()
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, texture2);
         glBindVertexArray(VAO);
-        // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-        // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0); 
         glDrawArrays(GL_TRIANGLES, 0, 36); 
-        // glBindVertexArray(0); // no need to unbind it every time
 
         // check and call events and swap the buffers
         glfwSwapBuffers(window);
@@ -318,16 +288,14 @@ void processInput(GLFWwindow *window)
 {
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-    float cameraSpeed = 2.5f * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        cameraPos += cameraSpeed * cameraFront;
+        camera.ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        cameraPos -= cameraSpeed * cameraFront;
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        cameraPos -= normalize(cross(cameraFront, cameraUp)) * cameraSpeed;
+        camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        cameraPos += normalize(cross(cameraFront, cameraUp)) * cameraSpeed;
-
+        camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
@@ -343,26 +311,10 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     lastX = xpos;
     lastY = ypos;
 
-    const float sensitivity = 0.1f;
-    xoffset *= sensitivity;
-    yoffset *= sensitivity;
-    camYaw   += xoffset;
-    camPitch += yoffset; 
-    if(camPitch > 89.0f)
-        camPitch =  89.0f;
-    if(camPitch < -89.0f)
-        camPitch = -89.0f;
-    direction.x = cos(radians(camYaw)) * cos(radians(camPitch));
-    direction.y = sin(radians(camPitch));
-    direction.z = sin(radians(camYaw)) * cos(radians(camPitch));
-    cameraFront = normalize(direction);
+    camera.ProcessMouseMovement(xoffset, yoffset, true);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    fov -= (float)yoffset;
-    if (fov < 1.0f)
-        fov = 1.0f;
-    if (fov > 45.0f)
-        fov = 45.0f; 
+    camera.ProcessMouseScroll(yoffset);
 }
