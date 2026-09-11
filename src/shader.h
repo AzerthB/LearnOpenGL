@@ -7,8 +7,10 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <glm/glm.hpp>
   
 using namespace std;
+using namespace glm;
 
 class Shader
 {
@@ -113,6 +115,14 @@ public:
     { 
         glUniform1f(glGetUniformLocation(ID, name.c_str()), value); 
     } 
+    void setVec3(const std::string &name, float x, float y, float z) const
+    { 
+        glUniform3f(glGetUniformLocation(ID, name.c_str()), x, y, z); 
+    } 
+    void setMat4(const string &name, mat4 matrix) const
+    {
+        glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, value_ptr(matrix));
+    }
 };
   
 #endif
